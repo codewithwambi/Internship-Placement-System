@@ -12,8 +12,8 @@ class FinalReport(models.Model):
 
 class FinalGrade(models.Model):
     placement = models.OneToOneField(Placement, on_delete=models.CASCADE, related_name='final_grade')
-    academic_score = models.DecimalField(max_digits=5, decimal_places=2) # e.g., 85.50
-    workplace_score = models.DecimalField(max_digits=5, decimal_places=2)
+    academic_score = models.DecimalField(max_digits=5, decimal_places=2,null=True,blank=True) # e.g., 85.50
+    workplace_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True )
     final_remarks = models.TextField()
     graded_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,17 +1,21 @@
 from django.db import models
-from users.models import WorkplaceSupervisor 
-from users.models import Student, AcademicSupervisor
+from users.models import WorkplaceSupervisor ,Student, AcademicSupervisor
+
 
 class Organization(models.Model):
     name = models.CharField(max_length=255)
-    location = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, blank=True, null=True)
+  #  location = models.CharField(max_length=255)
     industry = models.CharField(max_length=100)
+    contact_email = models.EmailField(blank=True, null=True)
+    
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
     
     def __str__(self):
         return self.name
 
 class Department(models.Model):
-    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE,related_name='departments')
     name = models.CharField(max_length=100)
 
     def __str__(self):
@@ -21,7 +25,7 @@ class OrganizationSupervisor(models.Model):
     supervisor = models.OneToOneField(
         WorkplaceSupervisor, 
         on_delete=models.CASCADE, 
-        related_name='workplace'
+        related_name='assignment'
     )
     organization = models.ForeignKey(
         Organization, 
@@ -36,7 +40,7 @@ class OrganizationSupervisor(models.Model):
     )
 
     def __str__(self):
-        return f"{self.supervisor.user.username} at {self.organization.name}"
+        return f"{self.supervisor.user.get_full_name()} at {self.organization.name}"
     
 
   

@@ -1,5 +1,6 @@
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,6 +21,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -114,3 +116,22 @@ STATIC_URL = 'static/'
 
 AUTH_USER_MODEL = 'users.User'   # 'users' = app name, 'User' = your custom model
 
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+JAZZMIN_SETTINGS = {
+    "site_title": "IPS Admin",
+    "site_header": "Internship Placement",
+    "welcome_sign": "Welcome to the Internship Management System",
+    "search_model": ["users.User", "organizations.Placement"],
+    
+    # This creates the Sidebar Navigation
+    "navigation_expanded": True,
+    "topmenu_links": [
+        {"name": "Home", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"model": "users.User"},
+    ],
+    "show_sidebar": True,
+    "changeform_format": "horizontal_tabs",
+}

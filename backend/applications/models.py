@@ -21,8 +21,14 @@ class InternshipApplication(models.Model):
     application_date = models.DateTimeField(auto_now_add=True)
     cover_letter = models.TextField(blank=True, null=True)
     cv_file = models.FileField(upload_to=student_cv_path, blank=True, null=True)
+
+    preferred_department = models.CharField(max_length=100, blank=True, null=True)
   
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted')
+
+    class Meta:
+        # This ensures the newest applications appear first in the admin dashboard
+        ordering = ['-application_date']
 
     def __str__(self):
         return f"{self.student.user.username} - {self.organization.name} ({self.status})"
