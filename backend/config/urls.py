@@ -19,6 +19,12 @@ from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
 from .views import home
+from django.contrib import admin
+
+# Customizing the Admin Interface titles
+admin.site.site_header = "Internship Placement System"
+admin.site.site_title = "IPS Admin Portal"
+admin.site.index_title = "Welcome to the IPS Management Dashboard"
 
 urlpatterns = [
     path('', home, name='home'),

@@ -6,17 +6,20 @@ from datetime import date, timedelta
 
 @receiver(post_save, sender=InternshipApplication)
 def create_placement_on_approval(sender, instance, created, **kwargs):
-    # We only act if the status was just changed to 'approved'
-    # and if a placement doesn't already exist for this student
+    # Only act if the status was just changed to 'approved'
     if instance.status == 'approved':
-        placement_exists = Placement.objects.filter(student=instance.student).exists()
         
-        if not placement_exists:
+        # IMPROVED CHECK: Only prevent creation if an ACTIVE placement already exists
+        active_placement_exists = Placement.objects.filter(
+            student=instance.student, 
+            status='active'
+        ).exists()
+        
+        if not active_placement_exists:
             Placement.objects.create(
                 student=instance.student,
                 organization=instance.organization,
-                # We set some default dates (e.g., starts today, ends in 3 months)
-                # The admin can change these later in the dashboard
+                # Default dates: starts today, ends in 90 days
                 start_date=date.today(),
                 end_date=date.today() + timedelta(days=90),
                 status='active'

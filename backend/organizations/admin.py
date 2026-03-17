@@ -1,15 +1,15 @@
 from django.contrib import admin
-from .models import Organization, Department, OrganizationSupervisor,Placement
+from .models import Organization, Department, OrganizationSupervisor, Placement
 
-# This allows you to add Departments directly while looking at an Organization
 class DepartmentInline(admin.TabularInline):
     model = Department
     extra = 1
 
 @admin.register(Organization)
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'location', 'industry')
-    search_fields = ('name', 'industry', 'location')
+    # Added address and contact_email to match your 'Organization' entity attributes
+    list_display = ('name', 'industry', 'address', 'contact_email') 
+    search_fields = ('name', 'industry', 'address')
     inlines = [DepartmentInline]
 
 @admin.register(Department)
@@ -23,14 +23,26 @@ class OrganizationSupervisorAdmin(admin.ModelAdmin):
     list_filter = ('organization', 'department')
     search_fields = ('supervisor__user__username', 'organization__name')
 
-    # Helper method to show the username in the list view
     def get_username(self, obj):
-        return obj.supervisor.user.username
+        return obj.supervisor.user.get_full_name() or obj.supervisor.user.username
     get_username.short_description = 'Supervisor Name'
-
 
 @admin.register(Placement)
 class PlacementAdmin(admin.ModelAdmin):
+    # Status and dates are critical for your 'Workflow States'
     list_display = ('student', 'organization', 'status', 'start_date', 'end_date')
-    list_filter = ('status', 'organization')
-    search_fields = ('student__user__username', 'organization__name')    
+    list_filter = ('status', 'organization', 'start_date')
+    search_fields = ('student__user__username', 'organization__name')
+    
+    # Organizing the placement details into sections for the Admin
+    fieldsets = (
+        ('Placement info', {
+            'fields': ('student', 'organization', 'department', 'status')
+        }),
+        ('Supervision', {
+            'fields': ('workplace_supervisor', 'academic_supervisor')
+        }),
+        ('Dates', {
+            'fields': ('start_date', 'end_date')
+        }),
+    )

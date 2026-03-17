@@ -18,7 +18,7 @@ class User(AbstractUser):
     role = models.CharField(
         max_length=20, 
         choices=Role.choices, 
-        default=Role.ADMIN
+        default=Role.STUDENT
     )
     phone = models.CharField(max_length=15, blank=True, null=True)
     
@@ -31,7 +31,7 @@ class User(AbstractUser):
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     registration_number = models.CharField(max_length=50, unique=True)
-    course = models.CharField(max_length=100)
+    course = models.CharField(max_length=100, blank=True , null=True)
 
     def __str__(self):
         return f"Student: {self.user.get_full_name()} - {self.registration_number}"
@@ -39,7 +39,7 @@ class Student(models.Model):
 
 class AcademicSupervisor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
-    department = models.CharField(max_length=100)
+    department = models.CharField(max_length=100, blank=True , null=True)
 
     def __str__(self):
         return f"Academic Sup: {self.user.get_full_name()}"
@@ -47,10 +47,10 @@ class AcademicSupervisor(models.Model):
 
 class WorkplaceSupervisor(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
-    company_name = models.CharField(max_length=100)
+    organization_name = models.CharField(max_length=100, blank=True , null=True)
 
     def __str__(self):
-        return f"Workplace Sup: {self.user.get_full_name()} ({self.company_name})"
+        return f"Workplace Sup: {self.user.get_full_name()} ({self.organization_name})"
     
 
 
@@ -62,4 +62,6 @@ def create_user_profile(sender, instance, created, **kwargs):
         elif instance.role == User.Role.ACADEMIC_SUPERVISOR:
             AcademicSupervisor.objects.get_or_create(user=instance)
         elif instance.role == User.Role.WORKPLACE_SUPERVISOR:
-            WorkplaceSupervisor.objects.get_or_create(user=instance)    
+            WorkplaceSupervisor.objects.get_or_create(user=instance) 
+
+
