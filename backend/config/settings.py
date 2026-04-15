@@ -21,6 +21,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -34,10 +35,12 @@ INSTALLED_APPS = [
     'applications',
     'supervision',
     'reports',
+    'drf_spectacular',
 ]
 
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -135,3 +138,22 @@ JAZZMIN_SETTINGS = {
     "show_sidebar": True,
     "changeform_format": "horizontal_tabs",
 }
+
+#TELL drf to drf_spectacular for its schema
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+
+#defines the identity and metadata for your Api
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Internship Placement System API',
+    'DESCRIPTION': 'API for managing student applications, document verification, and company placements.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # This helps group your endpoints logically
+    'COMPONENT_SPLIT_PATCH': True, 
+    'COMPONENT_SPLIT_REQUEST': True,
+}
+
+CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]

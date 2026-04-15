@@ -1,5 +1,6 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser,User
+from django.core.exceptions import ValidationError
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -56,6 +57,7 @@ class WorkplaceSupervisor(models.Model):
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
+    
     if created:
         if instance.role == User.Role.STUDENT:
             Student.objects.get_or_create(user=instance)
@@ -63,5 +65,33 @@ def create_user_profile(sender, instance, created, **kwargs):
             AcademicSupervisor.objects.get_or_create(user=instance)
         elif instance.role == User.Role.WORKPLACE_SUPERVISOR:
             WorkplaceSupervisor.objects.get_or_create(user=instance) 
+
+
+
+def validate_file_size(value):
+    filesize = value.size
+    # Professional Rule: Limit to 2MB (2 * 1024 * 1024 bytes)
+    if filesize > 2097152:
+        raise ValidationError("The maximum file size that can be uploaded is 2MB")
+
+class InternshipDocument(models.Model):
+    # Professional systems use choices to avoid "vibe coding" with strings
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    student = models.ForeignKey(User, on_delete=models.CASCADE)
+    document_name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='internship_docs/',validators=[validate_file_size])
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    remarks = models.TextField(blank=True, null=True) # For feedback if rejected
+
+    def __str__(self):
+        return f"{self.student.username} - {self.document_name}"
+    
+
 
 
