@@ -4,6 +4,17 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: 'http://127.0.0.1:8000/api/',
 });
+// Add this to your src/api.js
+export const loginUser = async (username, password) => {
+  const response = await api.post('token/', { username, password });
+  
+  // Professional move: Save the token in localStorage
+  if (response.data.access) {
+    localStorage.setItem('accessToken', response.data.access);
+    localStorage.setItem('userRole', response.data.role); // We'll send the role from Django
+  }
+  return response.data;
+};
 
 export const uploadDocument = (documentName, file) => {
   // We use FormData because we are sending a physical file, not just text

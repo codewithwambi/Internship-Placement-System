@@ -4,7 +4,7 @@ import {
 } from '@chakra-ui/react';
 import { uploadDocument } from '../api';
 
-const DocumentUpload = () => {
+const DocumentUpload = ({onUploadSuccess}) => {
   const [docName, setDocName] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -18,6 +18,8 @@ const DocumentUpload = () => {
     setLoading(true);
     try {
       await uploadDocument(docName, selectedFile);
+      if (onUploadSuccess) onUploadSuccess(); // Trigger the refresh!
+      
       alert("Upload Successful! Your document has been sent for review.");
       setDocName('');
       setSelectedFile(null);
