@@ -1,4 +1,6 @@
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions,generics
+from rest_framework.permissions import AllowAny  # AllowAny lives here!
+from rest_framework_simplejwt.tokens import RefreshToken # Add this import at the top
 from .models import InternshipDocument
 from rest_framework.response import Response # Fixed: should be Response, not responses
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -6,11 +8,39 @@ from django.contrib.auth import get_user_model
 from .serializers import (
     InternshipDocumentSerializer, 
     UserSerializer,
-    MyTokenObtainPairSerializer
+    MyTokenObtainPairSerializer,RegisterSerializer
 )
 
 # BUG FIX 1: get_user_model is a function and needs ()
 User = get_user_model()
+
+
+#register view 
+
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    permission_classes = [AllowAny]
+    serializer_class = RegisterSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        # FIX: Generate tokens directly here to avoid "AttributeError"
+        refresh = RefreshToken.for_user(user)
+        tokens = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+        
+        return Response({
+            "user": UserSerializer(user).data,
+            "tokens": tokens,
+            "message": "User registered successfully."
+        }, status=status.HTTP_201_CREATED)
+
 
 # --- Authentication views ---
 class MyTokenObtainPairView(TokenObtainPairView):
