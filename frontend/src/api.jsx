@@ -4,25 +4,42 @@ import axios from 'axios';
 const api = axios.create({
   baseURL: 'http://127.0.0.1:8000/api/',
 });
-// Add this to your src/api.js
+
+// This is the "Passport Stamper"
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      // Professional standard: The "Bearer" prefix is required by JWT
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 export const loginUser = async (username, password) => {
   const response = await api.post('token/', { username, password });
   
-  // Professional move: Save the token in localStorage
   if (response.data.access) {
     localStorage.setItem('accessToken', response.data.access);
-    localStorage.setItem('userRole', response.data.role); // We'll send the role from Django
+    localStorage.setItem('userRole', response.data.role);
+    localStorage.setItem('username', response.data.username);
+
+    // CRITICAL: Manually attach the token to the header for the 
+    // immediate requests that happen right after login.
+    api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`;
   }
   return response.data;
 };
-
 export const uploadDocument = (documentName, file) => {
-  // We use FormData because we are sending a physical file, not just text
   const formData = new FormData();
   formData.append('document_name', documentName);
   formData.append('file', file);
-  // Temporary: manual student ID until we build login
-  formData.append('student', 1); 
+  
+  // REMOVED: formData.append('student', 1); 
+  // Django's perform_create now handles this via request.user!
 
   return api.post('documents/', formData, {
     headers: {
@@ -31,4 +48,14 @@ export const uploadDocument = (documentName, file) => {
   });
 };
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.clear();
+      window.location.href = '/'; // Kick back to login
+    }
+    return Promise.reject(error);
+  }
+);
 export default api;
