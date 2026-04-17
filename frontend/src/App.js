@@ -4,7 +4,8 @@ import {
   Box, Flex, Heading, Spacer, Text, Container 
 } from '@chakra-ui/react';
 import StudentDashboard from './components/StudentDashboard';
-import Login from './components/Login'; // Make sure you have this component
+import Login from './components/Login'; 
+
 
 const system = createSystem(defaultConfig);
 
@@ -12,7 +13,21 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
 
-  // Check if a user is already logged in when the app starts
+  // 1. ONE function to handle both Login and Register success
+  const handleAuthSuccess = (authData) => {
+    // Save to local storage for persistence
+    localStorage.setItem('accessToken', authData.token);
+    localStorage.setItem('userRole', authData.role);
+    localStorage.setItem('username', authData.username);
+
+    // Update state to trigger re-render
+    setIsAuthenticated(true);
+    setUser({ 
+      username: authData.username, 
+      role: authData.role 
+    });
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     const role = localStorage.getItem('userRole');
@@ -32,7 +47,6 @@ function App() {
 
   return (
     <ChakraProvider value={system}>
-      {/* Navigation Bar - Only show logout if authenticated */}
       <Box bg="blue.700" px={4} py={3} color="white">
         <Flex minWidth="max-content" alignItems="center" gap="2">
           <Heading size="md">IPS Manager</Heading>
@@ -57,15 +71,13 @@ function App() {
         </Flex>
       </Box>
 
-      {/* Main Content Toggle */}
       <Container maxW="container.xl" py={10}>
         {isAuthenticated ? (
+          /* Show Dashboard if logged in */
           <StudentDashboard />
         ) : (
-          <Login onLoginSuccess={(userData) => {
-            setIsAuthenticated(true);
-            setUser(userData);
-          }} />
+          /* Pass our new handler to the Login component */
+          <Login onAuthSuccess={handleAuthSuccess} />
         )}
       </Container>
     </ChakraProvider>

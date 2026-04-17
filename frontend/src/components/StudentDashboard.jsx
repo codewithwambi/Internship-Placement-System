@@ -15,6 +15,7 @@ import api from '../api';
 
 const StudentDashboard = () => {
   const [documents, setDocuments] = useState([]);
+  const username=localStorage.getItem('username') || 'User'; //get real name
 
   const fetchMyDocuments = async () => {
     try {
@@ -26,7 +27,14 @@ const StudentDashboard = () => {
   };
 
   useEffect(() => {
-    fetchMyDocuments();
+    const token=localStorage.getItem('accessToken');
+    // Only fetch if the user is actually authenticated
+    if (token) {
+      fetchMyDocuments();
+    } else {
+      console.warn("Dashboard: No token found, skipping fetch.");
+    }
+    
   }, []);
 
   const getStatusColor = (status) => {
@@ -40,7 +48,7 @@ const StudentDashboard = () => {
   return (
     <Box p={8}>
       <VStack align="start" gap={2} mb={10}>
-        <Heading size="2xl">Welcome, Wambi Elvis</Heading>
+        <Heading size="2xl">Welcome, {username}</Heading>
         <Text fontSize="lg" color="gray.600">
           Makerere University Internship Placement System
         </Text>
@@ -61,8 +69,11 @@ const StudentDashboard = () => {
             <Heading size="md" mb={6}>My Submissions</Heading>
             
             {documents.length === 0 ? (
-              <Text color="gray.400">No documents submitted yet.</Text>
-            ) : (
+  <VStack py={10} color="gray.400">
+    <Text fontSize="lg">No documents submitted yet.</Text>
+    <Text fontSize="sm">Your internship files will appear here once uploaded.</Text>
+  </VStack>
+) : (
               <Stack gap={4}>
                 {documents.map((doc) => (
                   <Box key={doc.id} p={4} borderWidth="1px" borderRadius="md">
