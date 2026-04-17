@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import InternshipDocument,Student,AcademicSupervisor,WorkplaceSupervisor,User
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer,RefreshToken
+from django.db import transaction
 
 
 
@@ -19,15 +20,15 @@ class AcademicProfileSerializer(serializers.ModelSerializer):
 
 class WorkPlaceProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        fields=['organzation_name']
+        fields=['organization_name']
 
 #user serializer
 
 class UserSerializer(serializers.ModelSerializer):
     # these  will be populated based on user role
     student_profile=StudentProfileSerializer(source='student',read_only=True)
-    academic_profile=AcademicProfileSerializer(source="academic supervisor",read_only=True)
-    workplace_profile=WorkPlaceProfileSerializer(source='workplace supervisor',read_only=True)
+    academic_profile=AcademicProfileSerializer(source="academicsupervisor",read_only=True)
+    workplace_profile=WorkPlaceProfileSerializer(source='workplacesupervisor',read_only=True)
 
     class Meta:
         model=User
@@ -60,58 +61,48 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['username'] = self.user.username
         return data
     
-from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from .models import Student, AcademicSupervisor, WorkplaceSupervisor, InternshipDocument
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 
 User = get_user_model()
 
-# --- PROFILE SERIALIZERS ---
 
-class StudentProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Student
-        fields = ['registration_number', 'course']
+#registrationserializer
 
-class AcademicSupervisorProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AcademicSupervisor
-        fields = ['department']
-
-class WorkplaceSupervisorProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = WorkplaceSupervisor
-        fields = ['organization_name']
-
-# --- USER SERIALIZER ---
-
-class UserSerializer(serializers.ModelSerializer):
-    # These will be populated based on the user's role
-    student_profile = StudentProfileSerializer(source='student', read_only=True)
-    academic_profile = AcademicSupervisorProfileSerializer(source='academicsupervisor', read_only=True)
-    workplace_profile = WorkplaceSupervisorProfileSerializer(source='workplacesupervisor', read_only=True)
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+    registration_number = serializers.CharField(required=True)
+    course = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'role', 'phone', 'student_profile', 'academic_profile', 'workplace_profile'
-        ]
+        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'role', 'registration_number', 'course']
 
-# --- LOGIN SERIALIZER (JWT) ---
+    # FIX 1: Move this OUTSIDE of the create method. 
+    # It must be aligned with the "def create" line.
+    def validate_registration_number(self, value):
+        if Student.objects.filter(registration_number=value).exists():
+            raise serializers.ValidationError("This registration number is already registered.")
+        return value
 
-class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    Customizing the JWT response to include role and username 
-    so React can redirect to the correct dashboard immediately.
-    """
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        data['username'] = self.user.username
-        data['role'] = self.user.role
-        data['full_name'] = self.user.get_full_name()
-        return data
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("This username is already taken.")
+        return value
+
+    # FIX 2: Ensure this is a SEPARATE method
+    def create(self, validated_data):
+        with transaction.atomic():
+            reg_no = validated_data.pop('registration_number', None)
+            course = validated_data.pop('course', None)
+            
+            user = User.objects.create_user(**validated_data)
+
+            if user.role == User.Role.STUDENT:
+                Student.objects.create(user=user, registration_number=reg_no, course=course)
+            
+            return user
+
+
 
 # --- DOCUMENT SERIALIZER ---
 

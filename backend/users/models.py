@@ -55,16 +55,6 @@ class WorkplaceSupervisor(models.Model):
     
 
 
-@receiver(post_save, sender=User)
-def create_user_profile(sender, instance, created, **kwargs):
-    
-    if created:
-        if instance.role == User.Role.STUDENT:
-            Student.objects.get_or_create(user=instance)
-        elif instance.role == User.Role.ACADEMIC_SUPERVISOR:
-            AcademicSupervisor.objects.get_or_create(user=instance)
-        elif instance.role == User.Role.WORKPLACE_SUPERVISOR:
-            WorkplaceSupervisor.objects.get_or_create(user=instance) 
 
 
 
