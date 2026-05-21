@@ -1,22 +1,34 @@
-from rest_framework import viewsets, status, permissions,generics
-from rest_framework.permissions import AllowAny  # AllowAny lives here!
-from rest_framework_simplejwt.tokens import RefreshToken # Add this import at the top
-from .models import InternshipDocument
-from rest_framework.response import Response # Fixed: should be Response, not responses
+from rest_framework import viewsets, status, permissions, generics, views
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import get_user_model
+from django.db.models import Count
+
+from .models import InternshipDocument
 from .serializers import (
     InternshipDocumentSerializer, 
     UserSerializer,
-    MyTokenObtainPairSerializer,RegisterSerializer
+    MyTokenObtainPairSerializer, 
+    RegisterSerializer
 )
 
-# BUG FIX 1: get_user_model is a function and needs ()
 User = get_user_model()
 
+# ==========================================
+# CUSTOM PANEL PERMISSIONS
+# ==========================================
 
-#register view 
+class IsAdminUserRole(permissions.BasePermission):
+    """Checks explicitly for the custom ADMIN role text field."""
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == User.Role.ADMIN
 
+
+# ==========================================
+# AUTHENTICATION & REGISTRATION VIEWS
+# ==========================================
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -28,7 +40,6 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # FIX: Generate tokens directly here to avoid "AttributeError"
         refresh = RefreshToken.for_user(user)
         tokens = {
             'refresh': str(refresh),
@@ -42,20 +53,18 @@ class RegisterView(generics.CreateAPIView):
         }, status=status.HTTP_201_CREATED)
 
 
-# --- Authentication views ---
 class MyTokenObtainPairView(TokenObtainPairView):
-    """
-    Custom Login view that uses our custom serializer 
-    to return the User Role to React.
-    """
     serializer_class = MyTokenObtainPairSerializer
 
-# --- User and profile views ---
+
+# ==========================================
+# USER PROFILE DIRECTORY ENDPOINT
+# ==========================================
+
 class UserViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows users to be viewed or edited.
+    API endpoint that allows users to be viewed, updated, or deleted.
     """
-    # BUG FIX 2: Use User.objects.all(), not User.objects().all
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -63,33 +72,78 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == User.Role.ADMIN:
-            return User.objects.all()
+            return User.objects.all().order_by('-id')
         return User.objects.filter(id=user.id)
-    
-# --- Document logic views ---   
+
+
+# ==========================================
+# DOCUMENT TRACKING & APPROVAL PIPELINE
+# ==========================================
+
 class InternshipDocumentViewSet(viewsets.ModelViewSet):
     """
-    Handles Document Uploads and Approval.
+    Handles Document Uploads, Review Remarks, and Approval workflows.
     """
     queryset = InternshipDocument.objects.all()
     serializer_class = InternshipDocumentSerializer
-    # Ensure students must be logged in to upload
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        # 1. Students only see their own uploads
+        
+        # 1. Students can only see what they uploaded
         if user.role == User.Role.STUDENT:
             return InternshipDocument.objects.filter(student=user)
-        # 2. Supervisors see all documents for review
-        elif user.role in [User.Role.ACADEMIC_SUPERVISOR, User.Role.WORKPLACE_SUPERVISOR]:
-            return InternshipDocument.objects.all()
+            
+        # 2. Supervisors and Admins see everything across the system
+        # FIXED: Added ADMIN to prevent the dashboard from returning empty files lists
+        elif user.role in [User.Role.ACADEMIC_SUPERVISOR, User.Role.WORKPLACE_SUPERVISOR, User.Role.ADMIN]:
+            return InternshipDocument.objects.all().order_by('-uploaded_at')
         
-        return InternshipDocument.objects.none() # Safety fallback
+        return InternshipDocument.objects.none()
 
     def perform_create(self, serializer):
-        """
-        Automatically assigns the logged-in user as the 'student'.
-        """        
         serializer.save(student=self.request.user)
-        print(f"Document Checker: New file uploaded by {self.request.user}")
+
+    def update(self, request, *args, **kwargs):
+        """
+        Interceptors to let Admin and Supervisors update status and append remarks.
+        """
+        instance = self.get_object()
+        user = request.user
+
+        if user.role == User.Role.STUDENT:
+            return Response(
+                {"detail": "Students are not allowed to update status fields or reviews."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # Partial updates via your dashboard buttons are cleanly extracted here
+        instance.status = request.data.get('status', instance.status)
+        instance.remarks = request.data.get('remarks', instance.remarks)
+        instance.save()
+        
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+
+# ==========================================
+# DASHBOARD INSIGHTS ENGINE
+# ==========================================
+
+class AdminDashboardAnalyticsView(views.APIView):
+    """
+    Aggregates statistical database metrics for the front-end dashboard panels.
+    """
+    permission_classes = [IsAdminUserRole]
+
+    def get(self, request):
+        role_counts = User.objects.values('role').annotate(total=Count('role'))
+        doc_counts = InternshipDocument.objects.values('status').annotate(total=Count('status'))
+        
+        payload = {
+            "total_users": User.objects.count(),
+            "roles": {item['role']: item['total'] for item in role_counts},
+            "documents": {item['status']: item['total'] for item in doc_counts},
+        }
+        return Response(payload, status=status.HTTP_200_OK)

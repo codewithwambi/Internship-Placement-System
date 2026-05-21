@@ -1,86 +1,92 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import InternshipDocument,Student,AcademicSupervisor,WorkplaceSupervisor,User
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer,RefreshToken
+from .models import InternshipDocument, Student, AcademicSupervisor, WorkplaceSupervisor
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db import transaction
 
+User = get_user_model()
 
+# ==========================================
+# 1. PROFILE SERIALIZERS
+# ==========================================
 
-#profile seriaizers
-
-class  StudentProfileSerializer(serializers.ModelSerializer):
+class StudentProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        model=Student
-        fields=['registration_number','course']
+        model = Student
+        fields = ['registration_number', 'course']
 
 class AcademicProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        model=AcademicSupervisor
-        fields=['department']
+        model = AcademicSupervisor
+        fields = ['department']
 
 class WorkPlaceProfileSerializer(serializers.ModelSerializer):
     class Meta:
-        fields=['organization_name']
+        model = WorkplaceSupervisor  # FIXED: Added missing model mapping
+        fields = ['organization_name']
 
-#user serializer
+
+# ==========================================
+# 2. CORE USER SERIALIZER (Used by Admin Dashboard)
+# ==========================================
 
 class UserSerializer(serializers.ModelSerializer):
-    # these  will be populated based on user role
-    student_profile=StudentProfileSerializer(source='student',read_only=True)
-    academic_profile=AcademicProfileSerializer(source="academicsupervisor",read_only=True)
-    workplace_profile=WorkPlaceProfileSerializer(source='workplacesupervisor',read_only=True)
+    # Dynamically fetched through reverse relations defined in your Models
+    student_profile = StudentProfileSerializer(source='student', read_only=True)
+    academic_profile = AcademicProfileSerializer(source="academicsupervisor", read_only=True)
+    workplace_profile = WorkPlaceProfileSerializer(source='workplacesupervisor', read_only=True)
 
     class Meta:
-        model=User
-        fields=[
-            'id','username','email','first_name','last_name','role','phone',
-            'student_profile','academic_profile','workplace_profile'
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name', 
+            'role', 'phone', 'is_active', 'date_joined', # ENHANCED: added is_active & date_joined for Admin analytics
+            'student_profile', 'academic_profile', 'workplace_profile'
         ]
 
 
-class DocumentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InternshipDocument
-        fields = ['id', 'document_name', 'file', 'status', 'uploaded_at', 'remarks']
-        read_only_fields = ['status', 'uploaded_at'] # Students can't approve their own docs!
-
-
+# ==========================================
+# 3. JWT AUTHENTICATION SERIALIZER
+# ==========================================
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # Add the role to the token payload (encrypted)
-        token['role'] = user.role
+        token['role'] = user.role  # Encrypted inside JWT payload
         return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Add the role to the plain response (so React can see it immediately)
+        # Passed back in clear JSON text for React frontend router routing checks
         data['role'] = self.user.role
         data['username'] = self.user.username
+        data['id'] = self.user.id
         return data
-    
 
 
-User = get_user_model()
-
-
-#registrationserializer
+# ==========================================
+# 4. REGISTRATION ENGINE
+# ==========================================
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
-    registration_number = serializers.CharField(required=True)
-    course = serializers.CharField(required=True)
+    
+    # Make profile fields optional during base user registration step
+    registration_number = serializers.CharField(required=False, allow_blank=True)
+    course = serializers.CharField(required=False, allow_blank=True)
+    department = serializers.CharField(required=False, allow_blank=True)
+    organization_name = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'role', 'registration_number', 'course']
+        fields = [
+            'username', 'email', 'password', 'first_name', 'last_name', 
+            'role', 'phone', 'registration_number', 'course', 'department', 'organization_name'
+        ]
 
-    # FIX 1: Move this OUTSIDE of the create method. 
-    # It must be aligned with the "def create" line.
     def validate_registration_number(self, value):
-        if Student.objects.filter(registration_number=value).exists():
+        if value and Student.objects.filter(registration_number=value).exists():
             raise serializers.ValidationError("This registration number is already registered.")
         return value
 
@@ -89,25 +95,33 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("This username is already taken.")
         return value
 
-    # FIX 2: Ensure this is a SEPARATE method
     def create(self, validated_data):
         with transaction.atomic():
+            # Safely pop profile specific data out
             reg_no = validated_data.pop('registration_number', None)
             course = validated_data.pop('course', None)
+            dept = validated_data.pop('department', None)
+            org_name = validated_data.pop('organization_name', None)
             
+            # Create core base user
             user = User.objects.create_user(**validated_data)
 
+            # Route to correct model profile based on structural role selected
             if user.role == User.Role.STUDENT:
                 Student.objects.create(user=user, registration_number=reg_no, course=course)
+            elif user.role == User.Role.ACADEMIC_SUPERVISOR:
+                AcademicSupervisor.objects.create(user=user, department=dept)
+            elif user.role == User.Role.WORKPLACE_SUPERVISOR:
+                WorkplaceSupervisor.objects.create(user=user, organization_name=org_name)
             
             return user
 
 
-
-# --- DOCUMENT SERIALIZER ---
+# ==========================================
+# 5. INTERNSHIP DOCUMENT MANAGEMENT
+# ==========================================
 
 class InternshipDocumentSerializer(serializers.ModelSerializer):
-    # We use a StringRelatedField for the student to show the name, not just the ID
     student_name = serializers.ReadOnlyField(source='student.get_full_name')
 
     class Meta:
@@ -116,7 +130,5 @@ class InternshipDocumentSerializer(serializers.ModelSerializer):
             'id', 'student', 'student_name', 'document_name', 
             'file', 'status', 'uploaded_at', 'remarks'
         ]
-        read_only_fields = ['student', 'status', 'remarks']    
-
-
-
+        # Admin views override read_only values when modifying status explicitly
+        read_only_fields = ['student']
